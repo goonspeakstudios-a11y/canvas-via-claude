@@ -49,8 +49,12 @@ own Firefox profile with your own session cookie. Claude never sees a password.
 
 1. **Firefox**, with a profile you normally use for Canvas.
 2. **A browser-control extension + local MCP server.** This guide was written
-   against a hardened fork of [nanogenomic/ClaudeCodeBrowser](https://github.com/nanogenomic/ClaudeCodeBrowser)
-   (MIT). Any bridge that exposes `browser_navigate`, `browser_get_page_info`,
+   against `goonspeakstudios-a11y/staros-browser-assistant` — a hardened fork of
+   [nanogenomic/ClaudeCodeBrowser](https://github.com/nanogenomic/ClaudeCodeBrowser)
+   (MIT). That fork is private; ask for an invite if you don't have one, or
+   build from the upstream project.
+
+   Any bridge that exposes `browser_navigate`, `browser_get_page_info`,
    `browser_get_elements`, and `browser_screenshot` over local HTTP will work —
    only the tool names below would change.
 3. **Python 3** (used here just to pretty-print JSON responses).
