@@ -1,0 +1,7 @@
+*.png
+*.pdf
+*.txt
+.env
+api_token
+cookies.json
+__pycache__/
