@@ -5,3 +5,4 @@
 api_token
 cookies.json
 __pycache__/
+tests/.test_token

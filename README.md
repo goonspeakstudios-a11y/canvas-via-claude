@@ -148,7 +148,7 @@ recognises the browser and forwards a fresh token. Worth trying before you reach
 for the password:
 
 ```bash
-bcall browser_click '{"tab_id":1,"selector":"button[type=submit]"}'
+bcall browser_click "$(_json tab_id i "$TAB" selector s 'button[type=submit]')"
 sleep 7
 go "https://$CANVAS_HOST"
 ```
@@ -219,6 +219,31 @@ JSON blob — navigate to `/courses/:id/assignments/:aid` and screenshot it
 | Reads return SSO iframe content | Content script attached to the wrong frame | Re-navigate to the top-level URL, then read |
 | "Python was not found", exit 49 | On Windows, `python3` resolves to the Microsoft Store stub — it exists on PATH and does nothing | `scripts/canvas.sh` tests each candidate by running it. If you rolled your own, do the same, or set `PY` to a full path |
 | `chmod 600` appears to work but the file stays readable | Git Bash on Windows emulates POSIX permissions and silently drops them on `/tmp` | Use `icacls`. Do not trust a "private" temp file created from Git Bash |
+
+---
+
+## Tests
+
+```bash
+bash tests/run_tests.sh
+```
+
+No Firefox and no real bridge needed — `tests/mock_bridge.py` stands in for the
+server. It exists because of one detail that is easy to get wrong:
+
+**A closed browser is not silence.** The bridge waits 30 seconds and then
+returns HTTP 200 with well-formed JSON:
+
+```json
+{"success": false, "error": "Command getTabs timed out waiting for browser response after 30s"}
+```
+
+So "did I get JSON back?" is not a success check. Every real failure — dead
+browser, stale token, unknown tool, malformed body — comes back as parseable
+JSON at 200 or 403. A client that does not read the body reports all of them as
+fine, prints an empty result, and exits 0. The first version of this script did
+exactly that, and its `check` command cheerfully reported `firefox: connected`
+with Firefox closed.
 
 ---
 
