@@ -69,31 +69,45 @@ own Firefox profile with your own session cookie. Claude never sees a password.
 ## Setup
 
 The local server writes an API token to `~/.staros-browser/api_token`. Lock it
-down so only you can read it:
+down so only you can read it.
+
+On macOS or Linux, in your shell:
 
 ```bash
-# Windows
-icacls "%USERPROFILE%\.staros-browser\api_token" /inheritance:r /grant:r "%USERNAME%:R"
-
-# macOS / Linux
 chmod 600 ~/.staros-browser/api_token
 ```
 
-Then set a shell helper so every call is one line:
+On Windows, in **PowerShell or cmd** — not in Git Bash, where `chmod` looks like
+it works and does not:
+
+```
+icacls "%USERPROFILE%\.staros-browser\api_token" /inheritance:r /grant:r "%USERNAME%:R"
+```
+
+Then load the helpers:
 
 ```bash
 export CANVAS_HOST="canvas.yourschool.edu"
-TOK=$(cat "$HOME/.staros-browser/api_token" | tr -d '\r\n')
-
-bcall() {  # bcall <tool_name> <json_args>
-  curl -s -m 60 -X POST http://127.0.0.1:8765/mcp/call \
-    -H "Content-Type: application/json" \
-    -H "X-API-Key: $TOK" \
-    -d "{\"name\":\"$1\",\"arguments\":$2}"
-}
+source scripts/canvas.sh
 ```
 
-There is a ready-made version in [`scripts/canvas.sh`](scripts/canvas.sh).
+That gives you five commands:
+
+| Command | Does |
+|---|---|
+| `check` | Preflight — is the server up, is Firefox connected, which python |
+| `tabs` | List open tabs and their ids |
+| `go <url>` | Navigate the target tab, report where it landed |
+| `api <path>` | Hit a Canvas REST endpoint in the tab |
+| `shot [file]` | Full-page screenshot |
+
+**Run `check` first.** It separates the two failure modes that look identical
+from the outside — server down vs. Firefox closed.
+
+The script deliberately never puts your token on a command line, in an
+environment variable, or in a temp file; it pipes it into curl on stdin at call
+time. It also refuses to run if `BRIDGE_URL` points anywhere but your own
+machine, since that address is what decides where the token gets sent.
 
 ---
 
@@ -101,29 +115,25 @@ There is a ready-made version in [`scripts/canvas.sh`](scripts/canvas.sh).
 
 ### 0. Firefox has to be open
 
-The bridge will authenticate happily with no browser running, then every page
-call times out after 30s. Check first:
+The bridge authenticates happily with no browser running, then every page call
+times out 30 seconds later. It looks like an auth problem and is not. Preflight:
 
 ```bash
-bcall browser_get_tabs '{}' | python -c "
-import sys,json
-for t in json.load(sys.stdin).get('tabs',[]):
-    print(t['id'],'|',t.get('title','')[:60],'|',t.get('url','')[:90])
-"
+check
+tabs
 ```
 
-Note the tab id you want to drive. Everything below assumes `tab_id: 1`.
+`tabs` prints the id of every open tab. Note the one you want to drive —
+everything below assumes tab `1`. Change it with `export TAB=3` before sourcing.
 
 ### 1. Go to Canvas
 
 ```bash
-bcall browser_navigate "{\"url\":\"https://$CANVAS_HOST\",\"tab_id\":1}"
-sleep 7
-bcall browser_get_page_info '{"tab_id":1}' | python -c "
-import sys,json; d=json.load(sys.stdin)
-print('URL  :', d.get('url')); print('TITLE:', d.get('title'))
-"
+go "https://$CANVAS_HOST"
 ```
+
+It prints the URL and title it landed on, which is how you tell step 2 apart
+from being already signed in.
 
 ### 2. The login step — you do this part, not Claude
 
@@ -132,19 +142,23 @@ signed in. **Type your username and password into the Firefox window yourself.**
 Do not paste credentials into Claude, and do not ask it to type them.
 
 One thing worth knowing: schools using SAML SSO often still have a live session
-at the identity provider even after the Canvas session expires. In that case
-submitting the login form with both fields empty is enough — the IdP recognises
-you and forwards a fresh token. Worth trying before you reach for the password:
+at the identity provider even after the *Canvas* session expires. Submitting the
+login form with both fields empty is then enough — the identity provider already
+recognises the browser and forwards a fresh token. Worth trying before you reach
+for the password:
 
 ```bash
 bcall browser_click '{"tab_id":1,"selector":"button[type=submit]"}'
 sleep 7
-bcall browser_get_page_info '{"tab_id":1}' | python -c "
-import sys,json; d=json.load(sys.stdin); print(d.get('url')); print(d.get('title'))
-"
+go "https://$CANVAS_HOST"
 ```
 
 If it lands on the dashboard, you are in and no credentials moved anywhere.
+
+To be clear about what that is: it is **not** a way around logging in. It works
+only because *you* were already authenticated in *your own* browser, and it does
+nothing at all on a machine that has never signed in. If it fails, type your
+password into the Firefox window — that is the normal path, not a fallback.
 
 ### 3. When DOM reads come back empty — the important trick
 
@@ -157,14 +171,9 @@ Do not fight it. **Use Canvas's own REST API in the browser tab.** You are
 already authenticated by cookie, so every endpoint just renders as JSON:
 
 ```bash
-# your active courses
-bcall browser_navigate "{\"url\":\"https://$CANVAS_HOST/api/v1/courses?enrollment_state=active\",\"tab_id\":1}"
-
-# assignments for one course
-bcall browser_navigate "{\"url\":\"https://$CANVAS_HOST/api/v1/courses/COURSE_ID/assignments?per_page=50\",\"tab_id\":1}"
-
-# a single assignment, full prompt text
-bcall browser_navigate "{\"url\":\"https://$CANVAS_HOST/api/v1/courses/COURSE_ID/assignments/ASSIGNMENT_ID\",\"tab_id\":1}"
+api '/courses?enrollment_state=active'                       # your active courses
+api '/courses/COURSE_ID/assignments?per_page=50'             # assignments in one course
+api '/courses/COURSE_ID/assignments/ASSIGNMENT_ID'           # one assignment, full text
 ```
 
 Useful endpoints:
@@ -183,16 +192,12 @@ Useful endpoints:
 Screenshots work even when DOM reads do not, so they are the reliable fallback:
 
 ```bash
-bcall browser_screenshot '{"tab_id":1,"save_to_file":true,"filename":"canvas.png","full_page":true}' \
-  | python -c "
-import sys,json; d=json.load(sys.stdin)
-for k in ('image','data','base64'): d.pop(k, None)
-print(json.dumps(d)[:400])
-"
+shot week01.png
 ```
 
-Strip the base64 image field before printing or you will flood your terminal
-with a megabyte of noise.
+`shot` strips the base64 image field out of the response before printing it. Do
+the same if you roll your own, or you will flood the terminal with a megabyte of
+noise. It takes a filename only, not a path.
 
 For long assignment text, the rendered HTML page is easier to read than the raw
 JSON blob — navigate to `/courses/:id/assignments/:aid` and screenshot it
@@ -212,6 +217,8 @@ JSON blob — navigate to `/courses/:id/assignments/:aid` and screenshot it
 | "Receiving end does not exist" | Tab was loaded before the extension | Reload the tab — the content script injects at `document_end` |
 | `count: 0` on a page full of links | Canvas CSP blocking the content script | Use the REST API endpoints above, or screenshot |
 | Reads return SSO iframe content | Content script attached to the wrong frame | Re-navigate to the top-level URL, then read |
+| "Python was not found", exit 49 | On Windows, `python3` resolves to the Microsoft Store stub — it exists on PATH and does nothing | `scripts/canvas.sh` tests each candidate by running it. If you rolled your own, do the same, or set `PY` to a full path |
+| `chmod 600` appears to work but the file stays readable | Git Bash on Windows emulates POSIX permissions and silently drops them on `/tmp` | Use `icacls`. Do not trust a "private" temp file created from Git Bash |
 
 ---
 
