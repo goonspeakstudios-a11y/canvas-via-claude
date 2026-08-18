@@ -50,10 +50,12 @@ Firefox profile with your own session cookie.
 
 This was written against `goonspeakstudios-a11y/staros-browser-assistant`, a
 hardened fork of [nanogenomic/ClaudeCodeBrowser](https://github.com/nanogenomic/ClaudeCodeBrowser)
-(MIT). That fork is private — ask for an invite, or build from upstream.
+(MIT), running as a local HTTP bridge on `127.0.0.1:8765`. That fork is private —
+ask for an invite, or build from upstream.
 
 Any bridge exposing `browser_navigate`, `browser_get_page_info`,
-`browser_get_elements`, and `browser_screenshot` over local HTTP will work.
+`browser_get_elements`, and `browser_screenshot` over local HTTP will work —
+only the tool names in `scripts/canvas.sh` would change.
 
 > Install one you have actually read. An extension that can drive a logged-in
 > session is as powerful as your password. Avoid unauditable repackages.
