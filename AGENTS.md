@@ -88,6 +88,39 @@ Learn these. Every one of them looks like something it isn't.
 | `"Invalid arguments"` | Wrong case | Args are snake_case: `tab_id`, not `tabId` |
 | `Python was not found`, exit 49 | On Windows `python3` is a Microsoft Store stub that's on PATH and does nothing | Use the full interpreter path |
 | `tabs` prints escape-code gibberish | `canvas.sh` did not source, so you hit `/usr/bin/tabs`, the terminal tab-stop utility | Re-run `source scripts/canvas.sh` on its own and read the error. Do not pipe `source` into anything — a pipeline runs it in a subshell and the functions vanish |
+| Firefox is visibly running, extension is installed and enabled, but **zero** `/browser/poll` lines in the server log | **The extension is installed in a different profile than the one Firefox launched.** Firefox silently prefers the `Default=` entry in the `[Install...]` section of `profiles.ini`, which is often *not* the profile you installed the add-on into | See below. Restarting Firefox will never fix this |
+
+### The profile trap
+
+This one cost a full diagnostic cycle and looks like nothing else. Symptoms: the
+bridge is up, `/health` answers, the extension shows `active: true` and
+`signedState: 2` — and the browser never once contacts the server.
+
+Check which profile is actually in use before blaming anything else:
+
+```bash
+# which profile did Firefox launch?  (the [Install...] Default= line wins)
+grep -A2 '^\[Install' "$APPDATA/Mozilla/Firefox/profiles.ini"
+
+# which profile has the extension?
+ls -d "$APPDATA"/Mozilla/Firefox/Profiles/*/ | while read -r p; do
+  grep -l staros "$p/extensions.json" 2>/dev/null
+done
+```
+
+If they differ, launch the profile that has the extension as its own instance:
+
+```bash
+"/c/Program Files/Mozilla Firefox/firefox.exe" -P <profile-name> -no-remote &
+```
+
+Confirm it took by watching for polls, not by looking at the browser:
+
+```bash
+tail -5 ~/.staros-browser/server.log | grep browser/poll
+```
+
+Then `check` should read `firefox : connected`.
 
 The first row is the important one. A closed browser does not produce silence or
 an error status — it produces HTTP 200 with well-formed JSON. If you only check
