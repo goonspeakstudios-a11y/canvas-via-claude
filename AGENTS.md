@@ -87,6 +87,7 @@ Learn these. Every one of them looks like something it isn't.
 | 401 on everything | Wrong header name | It's `X-API-Key`, not `X-API-Token` |
 | `"Invalid arguments"` | Wrong case | Args are snake_case: `tab_id`, not `tabId` |
 | `Python was not found`, exit 49 | On Windows `python3` is a Microsoft Store stub that's on PATH and does nothing | Use the full interpreter path |
+| `tabs` prints escape-code gibberish | `canvas.sh` did not source, so you hit `/usr/bin/tabs`, the terminal tab-stop utility | Re-run `source scripts/canvas.sh` on its own and read the error. Do not pipe `source` into anything — a pipeline runs it in a subshell and the functions vanish |
 
 The first row is the important one. A closed browser does not produce silence or
 an error status — it produces HTTP 200 with well-formed JSON. If you only check
